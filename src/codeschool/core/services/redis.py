@@ -6,14 +6,13 @@
 # These steps are only necessary in development. Production should initialize
 # the redis server explicitly.
 #
+import os
 
 from codeschool import settings
 
 if settings.DEBUG:
     import redis as _redis
-
-
-    redis = _redis.connection.Connection()
+    redis = _redis.connection.Connection(host=os.environ.get('REDIS_SERVER'))
     try:
         redis.connect()
     except _redis.ConnectionError:

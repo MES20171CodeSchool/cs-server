@@ -1,14 +1,20 @@
+sudo: required
+
 language: python
+  - 3.6
+  
+env:
+  DOCKER_COMPOSE_VERSION: 1.10.0
+  
+services:
+  - docker
 
-python:
-  - "3.4"
-  - "3.6"
-
-install:
-  - sudo apt-get install libpq-dev python3-dev
-  - pip install --upgrade pip
-  - pip install -e .[dev]
+before_install:
+  - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - chmod +x docker-compose
+  - sudo mv docker-compose /usr/local/bin
+  - docker-compose build
 
 script:
-  - python manage.py makemigrations
-  - python manage.py migrate
+  - docker-compose up -d
+  - docker-compose down

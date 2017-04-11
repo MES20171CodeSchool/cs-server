@@ -5,6 +5,7 @@ INSTALLED_APPS = [
     # Codeschool optional apps
     'codeschool.questions.numeric',
     'codeschool.questions.coding_io',
+    'codeschool.questions.text',
     #'codeschool.gamification',
     #'codeschool.lms.courses',
     #'codeschool.social.feed',

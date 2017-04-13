@@ -1,13 +1,14 @@
 sudo: required
 
-language: python
-  - 3.6
-  
-env:
-  DOCKER_COMPOSE_VERSION: 1.10.0
-  
-services:
-  - docker
+# Test environments
+matrix:
+  include:
+   - env: TOXENV=py34
+     python: 3.4
+   - env: TOXENV=py35
+     python: 3.5
+   - env: TOXENV=py36
+     python: 3.6
 
 before_install:
   - curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose

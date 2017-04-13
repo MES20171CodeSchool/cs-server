@@ -130,7 +130,6 @@ def resource_to_url(function):
     ::
 
         {'url': obj.get_absolute_url(), 'status': 'success'}
-
     """
 
     @functools.wraps(function)

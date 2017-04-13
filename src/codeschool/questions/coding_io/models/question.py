@@ -514,8 +514,10 @@ class CodingIoQuestion(Question):
     # Actions
     def submit(self, user_or_request, language=None, **kwargs):
         if language and self.language:
-            raise ValueError('cannot set language')
-        elif self.language:
+            if language != self.language:
+                args = language, self.language
+                raise ValueError('cannot set language: %r != %r' % args)
+        if self.language:
             language = self.language
         language = get_programming_language(language)
         return super().submit(user_or_request, language=language, **kwargs)
@@ -592,7 +594,7 @@ class CodingIoQuestion(Question):
         )
 
     @srvice.route(r'^placeholder/$')
-    def serve_placeholder(self, request, language):
+    def route_placeholder(self, request, language):
         """
         Return the placeholder code for some language.
         """

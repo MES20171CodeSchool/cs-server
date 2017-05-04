@@ -1,48 +1,57 @@
-FROM python:3.6
+FROM debian:8.7
 
-ENV PATH /usr/local/bin:$PATH
-RUN apt-get update && apt-get -y install --no-install-recommends
-RUN apt-get install -y wget \
-	curl \
-	apt-utils
+RUN apt-get update -
+RUN apt-get install curl -y \
+    python3.4\
+    python3-pip
+RUN pip3 install --upgrade pip
+RUN pip3 install awscli --upgrade --user
 
-RUN pip3 install -U pip \ 
-	setuptools \
-	Django 
+RUN pip3 install \
+            gunicorn \
+            lazyutils \
+            Markdown \
+            PyYAML \
+            fake-factory \
+            factory-boy \
+            mommys_boy \
+            pygments \
+            html5lib \
+            bleach \
+            pygeneric \
+            srvice \
+            jinja2
 
-RUN mkdir code/
-WORKDIR code/
-ADD . /code/
-RUN pip3 install -e .[dev]
-RUN cd .. && apt-get install -y nodejs-legacy
-RUN cd .. && apt-get install -y nodejs npm
-RUN cd .. && npm config set unsafe-perm true
-RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
-RUN apt-get install -y nodejs
-RUN npm install
+# E-judge support
+RUN pip3 install \
+            markio \
+            iospec \
+            ejudge \
+            boxed
 
+# Django deps
+RUN pip3 install \
+            django==1.10 \
+            wagtail==1.9 \
+            wagtail-model-tools \
+            django-model-utils \
+            django-picklefield \
+            django-jsonfield \
+            django-annoying \
+            django-compressor \
+            django-userena \
+            django-polymorphic \
+            django-guardian>=1.4.6 \
+            django-model-reference
 
+# Extra dependencies for additional language support
+#RUN pip3 install \
+#            pytuga
+WORKDIR /app/src
+COPY $PWD  /app/src
+ENV WSGI_APPLICATION=codeschool.wsgi \
+    MEDIA_FOLDER=/var/www/media \
+    CODESCHOOL_PRODUCTION=true
+VOLUME ["/app/db/", "/var/www/media/", "/sock/"]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+CMD python3 manage.py runserver

@@ -36,7 +36,9 @@ services:
             - redis
         links:
             - redis
-        command: bash -c "inv run --production"
+        command: bash -l -c "python3 manage.py makemigrations && python3 manage.py migrate && gunicorn codeschool.wsgi -b unix:///tmp/sock/webapp.sock --reload -w 4 && python3 manage.py runserver"
+        tty: true
+
 
 # Redis database
     redis:

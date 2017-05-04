@@ -47,11 +47,13 @@ RUN pip3 install \
 # Extra dependencies for additional language support
 #RUN pip3 install \
 #            pytuga
-WORKDIR /app/src
-COPY $PWD  /app/src
+ADD ./ src
+WORKDIR /src
+# COPY $PWD  /app
+
 ENV WSGI_APPLICATION=codeschool.wsgi \
     MEDIA_FOLDER=/var/www/media \
     CODESCHOOL_PRODUCTION=true
 VOLUME ["/app/db/", "/var/www/media/", "/sock/"]
 
-CMD python3 manage.py runserver
+ # CMD python3 manage.py runserver

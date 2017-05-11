@@ -3,7 +3,9 @@ FROM debian:8.7
 RUN apt-get update -
 RUN apt-get install curl -y \
     python3.4\
-    python3-pip
+    python3-pip \
+    redis-server \
+    build-essential
 
 ADD ./ src
 WORKDIR /src

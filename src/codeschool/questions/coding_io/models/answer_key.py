@@ -16,8 +16,6 @@ class AnswerKey(models.Model):
     language plus the placeholder text that should be displayed.
     """
 
-    NULL_SOURCE_HASH = md5hash('')
-
     class ValidationError(Exception):
         pass
 
@@ -34,14 +32,6 @@ class AnswerKey(models.Model):
         ProgrammingLanguage,
         related_name='+',
     )
-    source = models.TextField(
-        _('answer source code'),
-        blank=True,
-        help_text=_(
-            'Source code for the correct answer in the given programming '
-            'language.'
-        ),
-    )
     placeholder = models.TextField(
         _('placeholder source code'),
         blank=True,
@@ -52,19 +42,6 @@ class AnswerKey(models.Model):
             'student should modify. It is possible to configure a global '
             'per-language boilerplate and leave this field blank.'
         ),
-    )
-    source_hash = models.CharField(
-        max_length=32,
-        default=NULL_SOURCE_HASH,
-        help_text=_('Hash computed from the reference source'),
-    )
-    error_message = models.TextField(
-        _('error message'),
-        blank=True,
-        help_text=_(
-            'If an error is found on post-validation, an error message is '
-            'stored in here.'
-        )
     )
 
     def __repr__(self):
@@ -77,13 +54,93 @@ class AnswerKey(models.Model):
             title = '<untitled>'
         return '%s (%s)' % (title, self.language)
 
-    def save(self, *args, **kwargs):
-        self.source_hash = md5hash(self.source)
-        super().save(*args, **kwargs)
+    def is_ignoring_validation_errors(self):
+        """
+        True to ignore errors found in post-validation.
+        """
 
-    def clean(self):
+        return self.question.ignore_validation_errors
+
+    def single_reference(self, source):
+        """
+        Return True if it is the only answer key in the set that defines a
+        source attribute.
+        """
+
+        if not self.source:
+            return False
+
         try:
-            check_syntax(self.source, lang=self.language.ejudge_ref())
+            return self.question.answers.has_program().get() == self
+        except self.DoesNotExist:
+            return False
+
+    # Wagtail admin
+    panels = [
+        panels.FieldPanel('language'),
+        panels.FieldPanel('placeholder'),
+    ]
+
+
+def check_syntax(source, lang):
+    """
+    Raises a SyntaxError if source code is invalid in the given language.
+    """
+
+    if lang == 'python':
+        compile(source, '<input>', 'exec')
+    else:
+        # FIXME: implement this in ejudge.
+        pass
+
+
+class AnswerKeySource(models.Model):
+    """
+
+    """
+
+    NULL_SOURCE_HASH = md5hash('')
+
+    validated = models.BooleanField(
+        _('is validated?'),
+        default=False,
+        help_text=_('Verify if the answer key source is validated')
+    )
+    source = models.TextField(
+        _('answer source code'),
+        blank=True,
+        help_text=_(
+            'Source code for the correct answer in the given programming '
+            'language.'
+        ),
+    )
+    error_message = models.TextField(
+        _('error message'),
+        blank=True,
+        help_text=_(
+            'If an error is found on post-validation, an error message is '
+            'stored in here.'
+        )
+    )
+    source_hash = models.CharField(
+        max_length=32,
+        default=NULL_SOURCE_HASH,
+        help_text=_('Hash computed from the reference source'),
+    )
+
+    def set_error_message(self, message):
+        """
+        Saves error message.
+        """
+
+        try:
+            self.error_message = message.__html__()
+        except AttributeError:
+            self.error_message = escape(message)
+
+    def clean(self, language):
+        try:
+            check_syntax(self.source, lang=language.ejudge_ref())
         except SyntaxError as ex:
             msg = _('Invalid syntax: %(msg)') % {'msg': str(ex)}
             raise ValidationError({'source': msg})
@@ -103,22 +160,9 @@ class AnswerKey(models.Model):
         if self.error_message and not self.is_ignoring_validation_errors():
             raise ValidationError({'source': mark_safe(self.error_message)})
 
-    def is_ignoring_validation_errors(self):
-        """
-        True to ignore errors found in post-validation.
-        """
-
-        return self.question.ignore_validation_errors
-
-    def set_error_message(self, message):
-        """
-        Saves error message.
-        """
-
-        try:
-            self.error_message = message.__html__()
-        except AttributeError:
-            self.error_message = escape(message)
+    def save(self, *args, **kwargs):
+        self.source_hash = md5hash(self.source)
+        super().save(*args, **kwargs)
 
     def has_changed_source(self):
         """
@@ -127,35 +171,11 @@ class AnswerKey(models.Model):
 
         return self.source_hash != md5hash(self.source)
 
-    def single_reference(self):
-        """
-        Return True if it is the only answer key in the set that defines a
-        source attribute.
-        """
-
-        if not self.source:
-            return False
-
-        try:
-            return self.question.answers.has_program().get() == self
-        except self.DoesNotExist:
-            return False
-
     # Wagtail admin
     panels = [
-        panels.FieldPanel('language'),
         panels.FieldPanel('source'),
-        panels.FieldPanel('placeholder'),
     ]
 
-
-def check_syntax(source, lang):
-    """
-    Raises a SyntaxError if source code is invalid in the given language.
-    """
-
-    if lang == 'python':
-        compile(source, '<input>', 'exec')
-    else:
-        # FIXME: implement this in ejudge.
-        pass
+    class Meta:
+        verbose_name = _('answer key source')
+        verbose_name_plural = _('answer keys source')

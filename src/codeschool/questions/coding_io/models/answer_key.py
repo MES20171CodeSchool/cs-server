@@ -119,6 +119,9 @@ class AnswerKey(models.Model):
         ProgrammingLanguage,
         related_name='+',
     )
+
+
+    # TODO: Tirar daqui e e colocar em placeholder
     placeholder = models.TextField(
         _('placeholder source code'),
         blank=True,

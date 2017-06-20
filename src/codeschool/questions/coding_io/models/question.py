@@ -13,6 +13,9 @@ from codeschool.fixes.parent_refresh import register_parent_prefetch
 from codeschool.questions.coding_io.models import TestState
 from codeschool.questions.models import Question
 from codeschool.utils.string import md5hash_seq
+
+from lazyutils import lazy, delegate_to
+
 from iospec import parse as parse_iospec, IoSpec
 from .submission import CodingIoSubmission
 from .. import ejudge
@@ -21,16 +24,42 @@ from .. import validators
 logger = logging.getLogger('codeschool.questions.coding_io')
 
 
-@register_parent_prefetch
+class GradingInfo(models.Model):
+    """
+    """
+    question = ...
+    source = ...
+    uuid = models.UUIDField()
+    iospec = ... # (opcional)
+    language = ...
+    is_pre_tests = ...
+
+
+    # Calculados (properties)
+    num_expansions = property(...)
+    iospec_template = ...
+    title = property(lambda self: self.question.title)
+
+
+    def clean(self):
+        super().clean()
+        # TODO: (copiar answer key)  validar se o source é sintaticamente válido
+
+
+class Placeholder(models.Model):
+    question = ...
+    source = ...
+    language = ...
+
+    class Meta:
+        unique_together = [('question', 'language')]
+
+
 class CodingIoQuestion(Question):
     """
     CodeIo questions evaluate source code and judge them by checking if the
     inputs and corresponding outputs match an expected pattern.
     """
-
-    class Meta:
-        verbose_name = _('Programming question (IO-based)')
-        verbose_name_plural = _('Programming questions (IO-based)')
 
     num_pre_tests = models.PositiveIntegerField(
         _('# of pre-test examples'),
@@ -64,11 +93,6 @@ class CodingIoQuestion(Question):
             'These tests are used only in a second round of corrections and is '
             'not immediately shown to users.'),
     )
-    test_state_hash = models.CharField(
-        max_length=32,
-        blank=True,
-        help_text=_('A hash to keep track of iospec sources updates.'),
-    )
     timeout = models.FloatField(
         _('timeout in seconds'),
         validators=[validators.timeout_validator],
@@ -82,9 +106,11 @@ class CodingIoQuestion(Question):
     default_placeholder = models.TextField(
         _('placeholder'),
         blank=True,
-        help_text=_('Default placeholder message that is used if it is not '
-                    'defined for the given language. This will appear as a '
-                    'block of comment in the beginning of the submission.')
+        help_text=_(
+            'Default placeholder message that is used if it is not '
+            'defined for the given language. This will appear as a '
+            'block of comment in the beginning of the submission.'
+        )
     )
     language = models.ForeignKey(
         ProgrammingLanguage,
@@ -100,40 +126,18 @@ class CodingIoQuestion(Question):
         ),
     )
 
-    # Fields for storing the results of an async post-validation.
-    error_field = models.CharField(max_length=20, blank=True)
-    error_message = models.TextField(blank=True)
-    ignore_programming_errors = models.BooleanField(
-        default=False,
-        help_text=_(
-            'Mark this if you want to ignore programming errors this time. It '
-            'will ignore errors once, but you still have to fix the source '
-            'of those errors to make the question become operational.'
-        )
-    )
-
-    __answers = ()
-    _iospec_expansion_is_dirty = False
-
-    @property
+    @lazy
     def pre_tests(self):
-        try:
-            return self._pre_tests
-        except AttributeError:
-            self._pre_tests = parse_iospec(self.pre_tests_source)
-            return self._pre_tests
+        return parse_iospec(self.pre_tests_source)
 
-    @pre_tests.setter
-    def pre_tests(self, value):
-        self._pre_tests = value
-        self.pre_tests_source = value.source()
+    @lazy
+    def _validator(self):
+        return CodingIoValidator(self)
 
-    @pre_tests.deleter
-    def pre_tests(self):
-        try:
-            del self._pre_tests
-        except AttributeError:
-            pass
+    def schedule_validation(self):
+        return self._validator.schedule_validation
+
+    schedule_validation = delegate_to('_validator')
 
     @property
     def post_tests(self):
@@ -148,22 +152,9 @@ class CodingIoQuestion(Question):
                 self.pre_tests, post_tests)
             return self._post_tests
 
-    @post_tests.setter
-    def post_tests(self, value):
-        pre_tests = self.pre_tests
-        value = IoSpec([test for test in value if test not in pre_tests])
-        self._post_tests = ejudge.combine_iospec(self.pre_tests, value)
-        self.post_tests_source = value.source()
-
-    @post_tests.deleter
-    def post_tests(self):
-        try:
-            del self._post_tests
-        except AttributeError:
-            pass
-
     submission_class = CodingIoSubmission
 
+    # FICA!
     def submit(self, request, language=None, **kwargs):
         # Cannot set language if question specifies a required lnaguage
         if language and self.language and language != self.language:
@@ -174,6 +165,8 @@ class CodingIoQuestion(Question):
         language = get_programming_language(language)
         return super().submit(request, language=language, **kwargs)
 
+
+    # SAI?
     def load_post_file_data(self, file_data):
         fake_post = super().load_post_file_data(file_data)
         fake_post['pre_tests_source'] = self.pre_tests_source
@@ -255,7 +248,7 @@ class CodingIoQuestion(Question):
             return ''
         return self._expand_tests(tests)
 
-    # Code runners
+    # Code runners (extrair)
     def check_with_code(self, source, tests, language=None, timeout=None):
         """
         Wrapped version of check_with_code() that uses question's own timeout
@@ -319,6 +312,8 @@ class CodingIoQuestion(Question):
             self.answers = self.__answers
         super().full_clean(*args, **kwargs)
 
+
+    # --------------------------
     def full_clean_expansions(self):
         self.get_current_test_state(update=True)
 
@@ -508,12 +503,6 @@ class CodingIoQuestion(Question):
         self.closed = True
         self.save()
 
-    # Serving pages and routing
-    template = 'questions/coding_io/detail.jinja2'
-    template_submissions = 'questions/coding_io/submissions.jinja2'
-    template_statistics = 'questions/coding_io/statistics.jinja2'
-    template_debug = 'questions/coding_io/debug.jinja2'
-
     def get_context(self, request, *args, **kwargs):
         context = dict(super().get_context(request, *args, **kwargs),
                        form=True)
@@ -586,17 +575,6 @@ class CodingIoQuestion(Question):
     def action_grade_with_post_tests(self, client, *args, **kwargs):
         self.regrade_post()
         client.dialog('<p>Successful operation!</p>')
-
-
-def compute_test_state_hash(question):
-    source_hashes = question.answers.values_list('source_hash', flat=True)
-    return md5hash_seq([
-        question.pre_tests_source,
-        question.post_tests_source,
-        '%x%x%f' % (question.num_pre_tests, question.num_post_tests,
-                    question.timeout),
-        '\n'.join(source_hashes),
-    ])
 
 
 #

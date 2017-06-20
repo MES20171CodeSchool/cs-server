@@ -10,90 +10,6 @@ from codeschool.questions.coding_io.models import CodingIoQuestion
 from codeschool.utils.string import md5hash
 
 
-class AnswerKey(models.Model):
-    """
-    Represents an answer to some question given in some specific computer
-    language plus the placeholder text that should be displayed.
-    """
-
-    class ValidationError(Exception):
-        pass
-
-    class Meta:
-        verbose_name = _('answer key')
-        verbose_name_plural = _('answer keys')
-        unique_together = [('question', 'language')]
-
-    question = models.ParentalKey(
-        CodingIoQuestion,
-        related_name='answers'
-    )
-    language = models.ForeignKey(
-        ProgrammingLanguage,
-        related_name='+',
-    )
-    placeholder = models.TextField(
-        _('placeholder source code'),
-        blank=True,
-        help_text=_(
-            'This optional field controls which code should be placed in '
-            'the source code editor when a question is opened. This is '
-            'useful to put boilerplate or even a full program that the '
-            'student should modify. It is possible to configure a global '
-            'per-language boilerplate and leave this field blank.'
-        ),
-    )
-
-    def __repr__(self):
-        return '<AnswerKey: %s>' % self
-
-    def __str__(self):
-        try:
-            title = self.question.title
-        except:
-            title = '<untitled>'
-        return '%s (%s)' % (title, self.language)
-
-    def is_ignoring_validation_errors(self):
-        """
-        True to ignore errors found in post-validation.
-        """
-
-        return self.question.ignore_validation_errors
-
-    def single_reference(self, source):
-        """
-        Return True if it is the only answer key in the set that defines a
-        source attribute.
-        """
-
-        if not self.source:
-            return False
-
-        try:
-            return self.question.answers.has_program().get() == self
-        except self.DoesNotExist:
-            return False
-
-    # Wagtail admin
-    panels = [
-        panels.FieldPanel('language'),
-        panels.FieldPanel('placeholder'),
-    ]
-
-
-def check_syntax(source, lang):
-    """
-    Raises a SyntaxError if source code is invalid in the given language.
-    """
-
-    if lang == 'python':
-        compile(source, '<input>', 'exec')
-    else:
-        # FIXME: implement this in ejudge.
-        pass
-
-
 class AnswerKeySource(models.Model):
     """
 
@@ -179,3 +95,92 @@ class AnswerKeySource(models.Model):
     class Meta:
         verbose_name = _('answer key source')
         verbose_name_plural = _('answer keys source')
+
+
+class AnswerKey(models.Model):
+    """
+    Represents an answer to some question given in some specific computer
+    language plus the placeholder text that should be displayed.
+    """
+
+    class ValidationError(Exception):
+        pass
+
+    class Meta:
+        verbose_name = _('answer key')
+        verbose_name_plural = _('answer keys')
+        unique_together = [('question', 'language')]
+
+    question = models.ParentalKey(
+        CodingIoQuestion,
+        related_name='answers'
+    )
+    language = models.ForeignKey(
+        ProgrammingLanguage,
+        related_name='+',
+    )
+    placeholder = models.TextField(
+        _('placeholder source code'),
+        blank=True,
+        help_text=_(
+            'This optional field controls which code should be placed in '
+            'the source code editor when a question is opened. This is '
+            'useful to put boilerplate or even a full program that the '
+            'student should modify. It is possible to configure a global '
+            'per-language boilerplate and leave this field blank.'
+        ),
+    )
+    answerKeySource = models.OneToOneField(
+        AnswerKeySource,
+        on_delete=models.CASCADE,
+        editable=False
+    )
+
+    def __repr__(self):
+        return '<AnswerKey: %s>' % self
+
+    def __str__(self):
+        try:
+            title = self.question.title
+        except:
+            title = '<untitled>'
+        return '%s (%s)' % (title, self.language)
+
+    def is_ignoring_validation_errors(self):
+        """
+        True to ignore errors found in post-validation.
+        """
+
+        return self.question.ignore_validation_errors
+
+    def single_reference(self, source):
+        """
+        Return True if it is the only answer key in the set that defines a
+        source attribute.
+        """
+
+        if not self.source:
+            return False
+
+        try:
+            return self.question.answers.has_program().get() == self
+        except self.DoesNotExist:
+            return False
+
+    # Wagtail admin
+    panels = [
+        panels.FieldPanel('language'),
+        panels.FieldPanel('placeholder'),
+    ]
+
+
+def check_syntax(source, lang):
+    """
+    Raises a SyntaxError if source code is invalid in the given language.
+    """
+
+    if lang == 'python':
+        compile(source, '<input>', 'exec')
+    else:
+        # FIXME: implement this in ejudge.
+        pass
